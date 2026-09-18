@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lịch Gặp Nhau 💕</title>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --pink: #ff6b9d;
+    --pink-light: #ffe0ec;
+    --pink-dark: #d6336c;
+    --bg: #fff5f8;
+    --text: #4a2532;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #fff0f5 0%, #ffe4ec 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--text);
+  }
+
+  /* Login */
+  .login-box {
+    background: white;
+    border-radius: 24px;
+    padding: 40px 32px;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: 0 20px 50px rgba(214, 51, 108, 0.15);
+    text-align: center;
+  }
+  .login-box .icon { font-size: 48px; margin-bottom: 8px; }
+  .login-box h1 { font-size: 22px; color: var(--pink-dark); margin-bottom: 24px; }
+  .login-box input {
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    border: 2px solid var(--pink-light);
+    border-radius: 12px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .login-box input:focus { border-color: var(--pink); }
+  .login-box button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--pink), var(--pink-dark));
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: transform 0.15s;
+  }
+  .login-box button:active { transform: scale(0.97); }
+  .error-msg { color: var(--pink-dark); font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+  /* App */
+  .app { display: none; width: 100%; max-width: 480px; }
+  .app.visible { display: block; }
+  .card {
+    background: white;
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(214, 51, 108, 0.12);
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .header h2 { color: var(--pink-dark); font-size: 18px; }
+  .logout-btn {
+    background: none;
+    border: none;
+    color: #a9a9a9;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .stats {
+    text-align: center;
+    background: var(--pink-light);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .stats .count { font-size: 36px; font-weight: 700; color: var(--pink-dark); }
+  .stats .label { font-size: 13px; color: var(--text); opacity: 0.8; }
+
+  .month-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .month-nav button {
+    background: var(--pink-light);
+    border: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 16px;
+    color: var(--pink-dark);
+    cursor: pointer;
+  }
+  .month-nav .month-label { font-weight: 600; font-size: 16px; }
+
+  .weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 12px;
+    color: #a9a9a9;
+    margin-bottom: 6px;
+  }
+  .days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+  .day-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    position: relative;
+    user-select: none;
+    transition: transform 0.1s;
+  }
+  .day-cell.empty { cursor: default; }
+  .day-cell.filled {
+    background: var(--pink-light);
+    color: var(--text);
+  }
+  .day-cell.checked {
+    background: linear-gradient(135deg, var(--pink), var(--pink-dark));
+    color: white;
+    font-weight: 600;
+  }
+  .day-cell.filled:active { transform: scale(0.92); }
+  .day-cell.today { border-color: var(--pink-dark); }
+
+  .loading { text-align: center; padding: 40px; color: #a9a9a9; }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--pink-dark);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="login-screen" class="login-box">
+  <div class="icon">💕</div>
+  <h1>Lịch Gặp Nhau</h1>
+  <input type="text" id="username" placeholder="Tên đăng nhập" autocomplete="username">
+  <input type="password" id="password" placeholder="Mật khẩu" autocomplete="current-password">
+  <button id="login-btn">Đăng nhập</button>
+  <div class="error-msg" id="error-msg"></div>
+</div>
+
+<div id="app" class="app">
+  <div class="card">
+    <div class="header">
+      <h2>💕 Lịch Gặp Nhau</h2>
+      <button class="logout-btn" id="logout-btn">Đăng xuất</button>
+    </div>
+
+    <div class="stats">
+      <div class="count" id="total-count">0</div>
+      <div class="label">ngày đã gặp nhau</div>
+    </div>
+
+    <div class="month-nav">
+      <button id="prev-month">‹</button>
+      <div class="month-label" id="month-label"></div>
+      <button id="next-month">›</button>
+    </div>
+
+    <div class="weekdays">
+      <div>T2</div><div>T3</div><div>T4</div><div>T5</div><div>T6</div><div>T7</div><div>CN</div>
+    </div>
+    <div class="days-grid" id="days-grid"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const VALID_USER = "hoanganhthu";
+const VALID_PASS = "hoanganhthu";
+const STORAGE_KEY = "met-days:" + VALID_USER;
+
+let checkedDays = new Set(); // stores 'YYYY-MM-DD'
+let currentDate = new Date();
+let saveTimer = null;
+
+const loginScreen = document.getElementById('login-screen');
+const appEl = document.getElementById('app');
+const toastEl = document.getElementById('toast');
+
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 1600);
+}
+
+// ---- Cấu hình Firebase: THAY BẰNG CONFIG CỦA BẠN (lấy từ bước "Thêm Web App" trong Firebase Console) ----
+const firebaseConfig = {
+  apiKey: "AIzaSyByW5k-O9QWxj2cFpNx_TzFaflylpdVBA4",
+  authDomain: "ngaygapnhau-7ae1f.firebaseapp.com",
+  projectId: "ngaygapnhau-7ae1f",
+  storageBucket: "ngaygapnhau-7ae1f.firebasestorage.app",
+  messagingSenderId: "835461394845",
+  appId: "1:835461394845:web:1306261cbb991d11acff74"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+// Tất cả tài khoản chung nhau 1 document duy nhất trong Firestore
+const docRef = db.collection('met-days').doc(VALID_USER);
+
+// ---- Storage (Firestore - dữ liệu dùng chung cho mọi thiết bị/người dùng) ----
+async function loadData() {
+  try {
+    const snap = await docRef.get();
+    if (snap.exists) {
+      const data = snap.data();
+      checkedDays = new Set(data.days || []);
+    } else {
+      checkedDays = new Set();
+    }
+  } catch (e) {
+    showToast('Không kết nối được tới máy chủ, kiểm tra lại cấu hình Firebase');
+    console.error('Load error:', e);
+    checkedDays = new Set();
+  }
+}
+
+async function saveData() {
+  try {
+    await docRef.set({ days: [...checkedDays] });
+  } catch (e) {
+    showToast('Lỗi khi lưu dữ liệu, thử lại sau');
+    console.error('Save error:', e);
+  }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveData, 250);
+}
+
+// ---- Login ----
+document.getElementById('login-btn').addEventListener('click', handleLogin);
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleLogin();
+});
+
+async function handleLogin() {
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const errEl = document.getElementById('error-msg');
+
+  if (u === VALID_USER && p === VALID_PASS) {
+    errEl.textContent = '';
+    loginScreen.style.display = 'none';
+    appEl.classList.add('visible');
+    appEl.innerHTML = '<div class="loading">Đang tải dữ liệu...</div>';
+    await loadData();
+    renderApp();
+  } else {
+    errEl.textContent = 'Sai tên đăng nhập hoặc mật khẩu';
+  }
+}
+
+function renderApp() {
+  appEl.innerHTML = `
+    <div class="card">
+      <div class="header">
+        <h2>💕 Lịch Gặp Nhau</h2>
+        <button class="logout-btn" id="logout-btn">Đăng xuất</button>
+      </div>
+      <div class="stats">
+        <div class="count" id="total-count">${checkedDays.size}</div>
+        <div class="label">ngày đã gặp nhau</div>
+      </div>
+      <div class="month-nav">
+        <button id="prev-month">‹</button>
+        <div class="month-label" id="month-label"></div>
+        <button id="next-month">›</button>
+      </div>
+      <div class="weekdays">
+        <div>T2</div><div>T3</div><div>T4</div><div>T5</div><div>T6</div><div>T7</div><div>CN</div>
+      </div>
+      <div class="days-grid" id="days-grid"></div>
+    </div>
+  `;
+  document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
+  document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
+  renderCalendar();
+}
+
+function handleLogout() {
+  appEl.classList.remove('visible');
+  loginScreen.style.display = 'block';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
+}
+
+function changeMonth(delta) {
+  currentDate.setMonth(currentDate.getMonth() + delta);
+  renderCalendar();
+}
+
+function dateKey(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function renderCalendar() {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+  document.getElementById('month-label').textContent = `${monthNames[month]} ${year}`;
+
+  const grid = document.getElementById('days-grid');
+  grid.innerHTML = '';
+
+  const firstDay = new Date(year, month, 1);
+  // Monday-first offset
+  let startOffset = firstDay.getDay() - 1;
+  if (startOffset < 0) startOffset = 6;
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = dateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+  for (let i = 0; i < startOffset; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'day-cell empty';
+    grid.appendChild(empty);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = dateKey(year, month, d);
+    const cell = document.createElement('div');
+    cell.className = 'day-cell filled';
+    if (checkedDays.has(key)) cell.classList.add('checked');
+    if (key === todayStr) cell.classList.add('today');
+    cell.textContent = d;
+    cell.addEventListener('click', () => toggleDay(key, cell));
+    grid.appendChild(cell);
+  }
+}
+
+function toggleDay(key, cell) {
+  if (checkedDays.has(key)) {
+    checkedDays.delete(key);
+    cell.classList.remove('checked');
+  } else {
+    checkedDays.add(key);
+    cell.classList.add('checked');
+  }
+  document.getElementById('total-count').textContent = checkedDays.size;
+  scheduleSave();
+}
+</script>
+</body>
+</html>
+
